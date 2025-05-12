@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新增图书</title>
+    <link rel="stylesheet" href="layui/css/layui.css">
+</head>
+<body>
+    <div class="layui-container" style="margin-top: 10px;">
+        <div class="layui-row">
+            <div class="layui-col-md8 layui-col-md-offset2">
+                <form class="layui-form layui-form-pane">
+                    <div class="layui-form-item">
+                      <label class="layui-form-label">图书名称</label>
+                      <div class="layui-input-block">
+                        <input type="text" name="bookName" autocomplete="off" placeholder="请输入图书名称" lay-verify="required" class="layui-input">
+                      </div>
+                    </div>
+
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">图书作者</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="authorName" autocomplete="off" placeholder="请输入图书作者" lay-verify="required" class="layui-input">
+                        </div>
+                    </div>
+
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">图书价格</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="price" autocomplete="off" placeholder="请输入图书价格" lay-verify="required" class="layui-input">
+                        </div>
+                    </div>
+
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">图书封面</label>
+                        <div class="layui-input-block">
+                            <div class="layui-upload-drag" style="display: block;" id="bookUrl-drag">
+                                <i class="layui-icon layui-icon-upload"></i> 
+                                <div>点击上传，或将文件拖拽到此处</div>
+                                <div class="layui-hide" id="bookUrl-preview">
+                                  <hr> <img src="" alt="上传成功后渲染" style="max-width: 100%">
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" name="bookUrl" id="bookUrl">
+                        <input type="hidden" name="bookAddress" id="bookAddress">
+                    </div>
+
+                    <div class="layui-form-item">
+                      <label class="layui-form-label">图书分类</label>
+                      <div class="layui-input-inline">
+                        <select name="categoryId" lay-filter="bookCategory">
+                          <option value="">请选择</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="layui-form-item" pane>
+                      <label class="layui-form-label">是否上架</label>
+                      <div class="layui-input-block">
+                        <input type="radio" name="status" value="1" title="上架" checked>
+                        <input type="radio" name="status" value="0" title="下架">
+                        
+                      </div>
+                    </div>
+                   
+                    <div class="layui-form-item">
+                      <button class="layui-btn" lay-submit lay-filter="add">添加</button>
+                      <button type="reset" class="layui-btn layui-btn-primary">重置</button>
+                    </div>
+                  </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="layui/layui.js"></script>
+    <script>
+        layui.use(function(){
+            // 获取图书分类信息
+            let $ = layui.$;
+            $.ajax({
+                url: 'http://localhost:8080/getCategoryList',
+                type: 'get',
+                dataType: 'json', 
+                success: function(res){       
+                    if(res.code == 0){
+                        let categoryList = res.data;
+                        let html = '';
+                        categoryList.forEach(function(item){
+                            html += `<option value="${item.categoryId}">${item.categoryName}</option>`;
+                        })
+                        $('select[lay-filter="bookCategory"]').append(html);
+                        // 重新渲染表单
+                        layui.form.render();
+                    } else {
+                        layer.msg(res.msg, {icon: 2});
+                    }
+                }
+            })
+
+            // 拖拽上传
+            layui.upload.render({
+                elem: '#bookUrl-drag'
+                ,url: 'http://localhost:8080/uploadFile'
+                ,accept: 'file'
+                ,done: function(res){
+                    layer.msg(res.msg, {icon: 1});
+                    $('#bookUrl').val(res.data.bookUrl);
+                    $('#bookAddress').val(res.data.bookAddress);
+                    $('#bookUrl-preview').removeClass('layui-hide')
+                    .find('img').attr('src', 'http://localhost:8080'+res.data.bookUrl);
+                    console.log(res)
+               }
+            })
+
+            //添加图书
+            layui.form.on('submit(add)', function(data){
+                let formData = data.field;
+                $.ajax({
+                    url: 'http://localhost:8080/addBook',
+                    type: 'post',
+                    contentType: 'application/json;charset=utf-8',
+                    data: JSON.stringify(formData),
+                    dataType: 'json',
+                    success: function(res){
+                        if(res.code == 0){
+                            try {
+                                // 关闭弹出层
+                                if (parent && parent.layer){
+                                    let index = parent.layer.getFrameIndex(window.name); //获取窗口索引
+                                    parent.layer.close(index);
+                                    parent.location.reload();
+                                 }
+                            } catch (error) {
+                                console.error("无法访问父窗口:", error);
+                            }
+                        }else{
+                            layer.msg(res.msg, {icon: 2});    
+                        }
+                    }
+                    
+                });
+                // 组织默认表单提交
+                return false;
+            });
+        })
+    </script>
+</body>
+</html>

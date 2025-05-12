@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书列表</title>
+    <link rel="stylesheet" href="layui/css/layui.css">
+</head>
+<body>
+    <h1 style="text-align: center;color: #1e9fff;margin-bottom: 20px;">图书列表</h1>
+    <form class="layui-form layui-row layui-col-space5">
+        <div class="layui-col-md2">
+            <div class="layui-input-wrap">
+                <input type="text" name="bookName"  placeholder="图书名称" class="layui-input" lay-affix="clear">
+            </div>
+        </div>
+
+        <div class="layui-col-md2">
+            <div class="layui-input-wrap">
+                <div id="categoryId" class="xm-select-demo"></div>
+            </div>
+        </div>
+
+        <div class="layui-col-md2">
+            <div class="layui-input-wrap">
+                <select name="status" >
+                    <option value="">是否上架</option>
+                    <option value="0">下架</option>
+                    <option value="1">上架</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="layui-col-md2">
+            <div class="layui-input-wrap">
+                <input type="text" class="layui-input" id="queryDate" name="time" placeholder="请选择时间范围">
+            </div>
+        </div>
+
+        <div class="layui-col-md2">
+            <button class="layui-btn" lay-submit lay-filter="book-search">查询</button>
+            <button type="reset" id="reset" class="layui-btn layui-btn-primary">清空</button>
+        </div>
+    </form>
+
+    <!--根据后端数据生成数据表格-->
+    <table class="layui-hide" id="test" lay-filter="test">
+
+    </table>
+    <script src="layui/layui.js"></script>
+    <script src="js/xm-select.js"></script>
+    <script>
+        layui.use(function(){
+            let table = layui.table;
+            let $ = layui.$;
+            let layer = layui.layer;
+
+            //获取分类列表
+            $.ajax({
+                url: 'http://localhost:8080/getCategoryList',
+                type: 'get',
+                dataType: 'json', 
+                success: function(res){       
+                    if(res.code == 0){
+                        // xm-select下拉框
+                        let categoryId = xmSelect.render({
+                            el: '#categoryId',
+                            radio: true, // 是否多选,true单选，false多选
+                            data: res.data,
+                            prop:{
+                                name: 'categoryName', // 显示的字段
+                                value: 'categoryId' // 提交的值
+                            },
+                            theme: {
+                                color: '#0081ff',
+                            },
+                            filterable: true, // 是否开启搜索
+                            name: 'categoryId',
+                            
+                        })
+
+                        // 绑定清空事件
+                        $('#reset').on('click', function(){
+                            categoryId.setValue([ ]);
+                        })
+                    } else {
+                        layer.msg(res.msg, {icon: 2});
+                    }
+                }
+            })
+
+            // 事件范围
+            layui.laydate.render({
+                elem: '#queryDate',
+                range: true,
+                type: 'datetime'
+            });
+
+            // 搜索提交
+
+            layui.form.on('submit(book-search)', function(data){
+                let field = data.field; // 获得表单字段
+                let time = field.time;
+                if (time && time.length > 0) {
+                    let times = time.split(' - ');
+                    if (times.length === 2) {
+                        field.start = times[0].trim();
+                        field.end = times[1].trim();
+                    }
+                }
+                console.log(field);
+                // 执行搜索重载
+                table.reload('test', {
+                    page: {
+                        curr: 1 // 重新从第 1 页开始
+                    },
+                    where: field // 搜索的字
+                });
+                return false;
+            });
+        
+            // 单元格事件处理
+            table.on('tool(test)', function(obj){
+                let data = obj.data;
+                if(obj.event === 'edit'){
+                    layer.open({
+                        type: 2,
+                        title: '修改图书',
+                        content: 'book-update.html', 
+                        area: ['500px', '600px'],
+                        end: function(){
+                            table.reload('test');
+                        },
+                        success: function(layero, index){
+                            // 获取弹出层的Jquery对象
+                            let body = layer.getChildFrame('body', index);
+                            body.find('#bookId').val(obj.data.bookId);
+                            body.find('#bookName').val(obj.data.bookName);
+                            body.find('#authorName').val(obj.data.authorName);
+                            body.find('#price').val(obj.data.price);
+                            body.find('#picUrl')[0].src = "http://localhost:8080"+obj.data.bookUrl;
+                            body.find('#bookUrl').val(obj.data.bookUrl);
+                            body.find('#bookAddress').val(obj.data.bookAddress);
+                            body.find('#categoryUid').val(obj.data.categoryId);
+                            body.find('#statusU').val(obj.data.status);
+                           
+                        }
+                    })
+                } else if(obj.event === 'del'){
+                    layer.confirm('确定删除吗？', {btn:['确定','取消']}, function(index){
+                        // 发送ajax请求，删除图书信息
+                        let bookId = data.bookId;
+                        $.ajax({
+                             url: 'http://localhost:8080/deleteBook',
+                             type: 'delete',
+                             data: {bookId: bookId},
+                             dataType: 'json',
+                             success: function(res){
+                                 if(res.code == 0){
+                                     layer.msg('删除成功', {icon: 1});
+                                     // obj.del();
+                                     table.reload('test');
+                                 } else {
+                                     layer.msg(res.msg, {icon: 2});
+                                 }
+                             }
+                        })
+                        layer.close(index);
+                   });
+
+                }
+            })
+
+            // 监听头部工具栏事件
+            table.on('toolbar(test)', function(obj){
+                 let event = obj.event;
+                 if(event === 'add'){
+                    layer.open({
+                        type: 2,
+                        title: '添加图书',
+                        content: 'book-add.html', 
+                        area: ['500px', '600px'],
+                        end: function(){
+                            table.reload('test');
+                        }
+                    })
+                 } else if(event === 'batch-del'){
+                    let id = obj.config.id;
+                    let checkStatus = table.checkStatus(id);
+                    let data = checkStatus.data;
+                    let ids = [];
+                    if (data.length == 0){
+                        layer.msg('请选择要删除的图书', {icon: 2});
+                        return; 
+                    } else {
+                        for (let i = 0; i < data.length; i++){
+                            ids.push(data[i].bookId);
+                        }
+                        layer.confirm('确定删除吗？', {btn:['确定','取消']}, function(index){
+                            $.ajax({
+                                url: 'http://localhost:8080/batchDeleteBook',
+                                type: 'post',
+                                data: JSON.stringify(ids), 
+                                dataType: 'json',
+                                contentType: 'application/json;charset=utf-8',
+                                success: function(res){
+                                    if(res.code == 0){
+                                     layer.msg('删除成功', {icon: 1});
+                                     // obj.del();
+                                     table.reload('test');
+                                    } else {
+                                        layer.msg(res.msg, {icon: 2});
+                                    }
+                                }
+                            })
+                            layer.close(index);
+                        });
+                    }
+                    
+                 }
+            })
+
+
+            table.render({
+                elem: '#test',
+                url: 'http://localhost:8080/queryBooksPage',
+                page: {
+                    limits: [5,10,15,20],
+                    prev: "上一页",
+                    next: "下一页",
+                    theme: '#1e9fff'
+                },
+                request: {
+                    pageName: 'pageNo',
+                    limitName: 'pageSize'
+                },
+                parseData: function(res){
+                    // console.log(res);
+                    return {
+                        "code": res.code,
+                        "msg": res.msg,
+                        "count": res.data.total,
+                        "data": res.data.page
+                    };
+                },
+                toolbar: `
+                    <div>
+                        <button type="button" class="layui-btn layui-btn-sm layui-bg-red" lay-event="batch-del">批量删除</button>
+                        <button type="button" class="layui-btn layui-btn-sm layui-bg-blue" lay-event="add">添加</button>    
+                    </div>
+                `,
+                cols: [[
+                    {type: 'checkbox', fixed: 'left'},
+                    {field: 'bookId', title: '图书编号'},
+                    {field: 'bookName', title: '图书名称'},
+                    {field: 'authorName', title:'图书作者'},
+                    {field: 'categoryName', title:'图书分类'},
+                    {field: 'price', title:'图书价格'},
+                    {title: '图书封面', templet: function(d){ 
+                            return '<img src="http://localhost:8080'+d.bookUrl+'" >';
+                        }
+                    },{title:'是否上架', field:'status', templet: function(d){
+                            return d.status == "1" ? '<span class="layui-badge layui-bg-green">上架</span>' : '<span class="layui-badge">下架</span>';
+                        }
+                    },{field: 'createTime', title:'创建时间'},
+                    {
+                        title: '操作', templet: function(d){
+                            let s = '<button type="button" class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">更新</button>';
+                            s+='<button type="button" class="layui-btn layui-btn-xs layui-bg-red" lay-event="del">删除</button>';
+                            return s;
+                        }
+                    }
+                ]]
+            })
+
+        });
+    </script>
+</body>
+</html>
